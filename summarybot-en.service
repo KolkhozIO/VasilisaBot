@@ -1,0 +1,17 @@
+[Unit]
+Description=Telegram Summary Bot (English)
+After=network.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=1
+User=user
+WorkingDirectory=/home/user/
+ExecStart=/usr/bin/python3 /home/user/bot.py
+Environment="TELEGRAM_BOT_TOKEN=YOUR_EN_BOT_TOKEN"
+Environment="BOT_LANGUAGE=EN"
+
+[Install]
+WantedBy=multi-user.target

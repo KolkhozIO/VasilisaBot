@@ -27,7 +27,15 @@ if BOT_LANGUAGE not in SUPPORTED_LANGUAGES:
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
 # Data directories
-DATA_DIR = "data"
+# Use a unique data directory based on bot token (last 8 chars) if available
+# This allows running multiple bots with different tokens without data conflicts
+if TELEGRAM_BOT_TOKEN and TELEGRAM_BOT_TOKEN != "YOUR_TELEGRAM_BOT_TOKEN":
+    # Use last 8 characters of the token to create a unique directory
+    BOT_ID = TELEGRAM_BOT_TOKEN[-8:]
+    DATA_DIR = os.path.join("data", BOT_ID)
+else:
+    DATA_DIR = "data"
+
 PROMPTS_FILE = os.path.join(DATA_DIR, "prompts.json")
 GROUP_PROMPTS_FILE = os.path.join(DATA_DIR, "group_prompts.json")
 MESSAGES_FILE = os.path.join(DATA_DIR, "messages.json")

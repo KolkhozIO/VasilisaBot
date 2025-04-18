@@ -11,6 +11,7 @@ import time
 from typing import Dict, List, Optional, Set, Union, Any
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+import telegram.error
 from telegram.ext import (
     Application,
     CommandHandler as TelegramCommandHandler,
@@ -27,7 +28,7 @@ from config.settings import (
     CHOOSING_MODEL, SETTING_PROMPT, CHOOSING_PROMPT_TYPE, SETTING_CONFIG,
     CHOOSING_CONFIG, CHOOSING_CHAT, ENTERING_CHAT_ID, CHOOSING_MODEL_TARGET,
     CHOOSING_TEMP_TYPE, CHOOSING_CHAT_FOR_TEMP, ENTERING_CHAT_ID_FOR_TEMP,
-    SETTING_TEMPERATURE
+    SETTING_TEMPERATURE, BOT_LANGUAGE, DATA_DIR
 )
 from utils.logging_utils import setup_logging, get_logger
 from utils.file_utils import (
@@ -133,10 +134,20 @@ async def auto_save_data(interval_minutes: int = 5):
     Args:
         interval_minutes: Interval in minutes between saves
     """
-    while True:
-        await asyncio.sleep(interval_minutes * 60)
-        logger.info(f"Auto-saving data (interval: {interval_minutes} minutes)")
-        await save_data()
+    try:
+        while True:
+            await asyncio.sleep(interval_minutes * 60)
+            logger.info(f"Auto-saving data (interval: {interval_minutes} minutes)")
+            try:
+                await save_data()
+                logger.info("Auto-save completed successfully")
+            except Exception as e:
+                logger.error(f"Error during auto-save: {e}")
+    except asyncio.CancelledError:
+        # Handle task cancellation gracefully
+        logger.info("Auto-save task cancelled")
+    except Exception as e:
+        logger.error(f"Unexpected error in auto-save task: {e}")
 
 # Clean input text
 def clean_input_text(text: str) -> str:
@@ -158,7 +169,7 @@ def clean_input_text(text: str) -> str:
     return text
 
 # Main function
-async def main():
+def main():
     """Start the bot."""
     # Create data directories
     ensure_data_directories()
@@ -166,10 +177,14 @@ async def main():
     # Load user data
     load_data()
     
-    # Check if LLM API is available
-    llm_available = await check_llm_availability()
-    if not llm_available:
-        logger.warning(f"LLM API is not available. The bot will not be able to generate responses.")
+    # Check if the bot token is valid
+    if not TELEGRAM_BOT_TOKEN or TELEGRAM_BOT_TOKEN == "YOUR_TELEGRAM_BOT_TOKEN":
+        logger.error("Invalid Telegram bot token. Please set a valid token in config/settings.py")
+        sys.exit(1)
+    
+    # Log bot information
+    bot_id = TELEGRAM_BOT_TOKEN[-8:] if TELEGRAM_BOT_TOKEN else "unknown"
+    logger.info(f"Starting bot with ID: {bot_id}, Language: {BOT_LANGUAGE}, Data directory: {DATA_DIR}")
     
     # Create application
     application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
@@ -221,37 +236,95 @@ async def main():
     # Register message handler for regular messages
     application.add_handler(TelegramMessageHandler(filters.TEXT | filters.PHOTO, message_handler.handle_message))
     
-    # Start auto-save task
-    asyncio.create_task(auto_save_data(bot_config["auto_save_interval"]))
+    # Define a function to check LLM availability at startup
+    async def check_llm_at_startup(application):
+        # The application parameter is passed by the telegram library
+        llm_available = await check_llm_availability()
+        if not llm_available:
+            logger.warning(f"LLM API is not available. The bot will not be able to generate responses.")
+        
+        # Start auto-save task
+        asyncio.create_task(auto_save_data(bot_config["auto_save_interval"]))
     
-    # Run the bot
-    await application.run_polling()
+    # Add the startup function to the application
+    try:
+        application.post_init = check_llm_at_startup
+    except AttributeError:
+        # If post_init is not available, run the check immediately
+        logger.warning("post_init not available, checking LLM availability immediately")
+        # Create a new event loop for this check
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            llm_available = loop.run_until_complete(check_llm_availability())
+            if not llm_available:
+                logger.warning(f"LLM API is not available. The bot will not be able to generate responses.")
+            
+            # Start auto-save task in a separate thread
+            import threading
+            
+            def run_auto_save():
+                # Create a new event loop for this thread
+                save_loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(save_loop)
+                try:
+                    # Run the auto-save coroutine
+                    save_loop.run_until_complete(auto_save_data(bot_config["auto_save_interval"]))
+                except Exception as e:
+                    logger.error(f"Error in auto-save thread: {e}")
+                finally:
+                    save_loop.close()
+            
+            # Start the auto-save thread
+            auto_save_thread = threading.Thread(target=run_auto_save, daemon=True)
+            auto_save_thread.start()
+            logger.info("Auto-save task started in a separate thread")
+        finally:
+            loop.close()
+    
+    # We'll handle shutdown in the signal handler
+    
+    # Run the bot with retry logic
+    max_retries = 3
+    retry_delay = 5  # seconds
+    
+    for attempt in range(1, max_retries + 1):
+        try:
+            logger.info(f"Starting bot (attempt {attempt}/{max_retries})...")
+            application.run_polling(drop_pending_updates=True, timeout=30, read_timeout=30, write_timeout=30)
+            break  # If we get here, the bot started successfully
+        except telegram.error.TimedOut:
+            if attempt < max_retries:
+                logger.warning(f"Connection to Telegram API timed out. Retrying in {retry_delay} seconds...")
+                time.sleep(retry_delay)
+                retry_delay *= 2  # Exponential backoff
+            else:
+                logger.error("Failed to connect to Telegram API after multiple attempts. Please check your network connection.")
+                raise
+        except Exception as e:
+            logger.error(f"Error starting bot: {e}")
+            raise
 
 if __name__ == "__main__":
     # Handle Ctrl+C gracefully
     def signal_handler(sig, frame):
         logger.info("Received signal to terminate, saving data...")
-        # Don't try to get a new event loop or run_until_complete here
-        # Just set a flag to indicate we want to exit
-        # The main loop will handle the cleanup
-        sys.exit(0)
+        # Create a new event loop for the signal handler
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        try:
+            # Run the save_data coroutine in this new loop
+            loop.run_until_complete(save_data())
+            logger.info("Data saved, exiting...")
+        except Exception as e:
+            logger.error(f"Error saving data: {e}")
+        finally:
+            loop.close()
+            sys.exit(0)
     
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
     
-    # Create a new event loop and set it as the current event loop
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    
-    try:
-        # Run the main function
-        loop.run_until_complete(main())
-    except KeyboardInterrupt:
-        # Handle Ctrl+C
-        logger.info("Received KeyboardInterrupt, shutting down...")
-    finally:
-        # Save data before exiting
-        loop.run_until_complete(save_data())
-        # Close the event loop
-        loop.close()
-        logger.info("Bot shutdown complete.")
+    # Run the bot
+    main()

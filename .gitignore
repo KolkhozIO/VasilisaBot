@@ -50,3 +50,5 @@ models/*.bin
 models/*.gguf
 models/*.ggml
 models/downloaded/
+
+old/
