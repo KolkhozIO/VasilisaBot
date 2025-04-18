@@ -13,8 +13,8 @@ from typing import Dict, List, Optional, Set, Union, Any
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
-    CommandHandler,
-    MessageHandler,
+    CommandHandler as TelegramCommandHandler,
+    MessageHandler as TelegramMessageHandler,
     CallbackQueryHandler,
     ContextTypes,
     filters,
@@ -209,17 +209,17 @@ async def main():
     )
     
     # Register command handlers
-    application.add_handler(CommandHandler("start", command_handler.start))
-    application.add_handler(CommandHandler("help", command_handler.help_command))
-    application.add_handler(CommandHandler("factual", command_handler.factual))
-    application.add_handler(CommandHandler("chatid", command_handler.chatid))
-    application.add_handler(CommandHandler("summarize", message_handler.handle_summarize))
-    application.add_handler(CommandHandler("hidden_summary", command_handler.hidden_summary))
-    application.add_handler(CommandHandler("hidden_query", command_handler.hidden_query))
-    application.add_handler(CommandHandler("model", command_handler.model))
+    application.add_handler(TelegramCommandHandler("start", command_handler.start))
+    application.add_handler(TelegramCommandHandler("help", command_handler.help_command))
+    application.add_handler(TelegramCommandHandler("factual", command_handler.factual))
+    application.add_handler(TelegramCommandHandler("chatid", command_handler.chatid))
+    application.add_handler(TelegramCommandHandler("summarize", message_handler.handle_summarize))
+    application.add_handler(TelegramCommandHandler("hidden_summary", command_handler.hidden_summary))
+    application.add_handler(TelegramCommandHandler("hidden_query", command_handler.hidden_query))
+    application.add_handler(TelegramCommandHandler("model", command_handler.model))
     
     # Register message handler for regular messages
-    application.add_handler(MessageHandler(filters.TEXT | filters.PHOTO, message_handler.handle_message))
+    application.add_handler(TelegramMessageHandler(filters.TEXT | filters.PHOTO, message_handler.handle_message))
     
     # Start auto-save task
     asyncio.create_task(auto_save_data(bot_config["auto_save_interval"]))
