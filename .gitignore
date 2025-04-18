@@ -46,4 +46,7 @@ config.local.json
 data/custom_prompts.json
 
 # Ollama models (if any are stored locally)
-models/
+models/*.bin
+models/*.gguf
+models/*.ggml
+models/downloaded/
