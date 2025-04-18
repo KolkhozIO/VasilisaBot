@@ -31,7 +31,10 @@ if __name__ == "__main__":
 logger = logging.getLogger(__name__)
 logger.setLevel(log_level)
 logger.info(f"Уровень логирования установлен на: {logging.getLevelName(log_level)}")
-LLM_API_URL = os.getenv("LLM_API_URL", "http://localhost:11434/api")
+
+# LLM settings
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "ollama").lower()
+LLM_API_URL = os.getenv("LLM_API_URL", "http://localhost:11434/api" if LLM_PROVIDER == "ollama" else "http://localhost:1234/v1")
 DEFAULT_MODEL = os.getenv("LLM_MODEL", "llama2")
 
 
@@ -85,10 +88,55 @@ async def check_ollama_connection():
         logger.error(f"Неожиданная ошибка: {e}")
         return False
 
+async def check_lmstudio_connection():
+    """Проверяет соединение с LM Studio API."""
+    logger.info(f"Проверка соединения с LM Studio API по URL: {LLM_API_URL}")
+
+    try:
+        # LM Studio использует OpenAI-совместимый API
+        check_url = f"{LLM_API_URL}/models"
+        logger.info(f"Отправка GET запроса на: {check_url}")
+        
+        async with aiohttp.ClientSession() as session:
+            try:
+                async with session.get(check_url, timeout=5) as response:
+                    logger.info(f"Получен ответ со статусом: {response.status}")
+                    
+                    if response.status == 200:
+                        data = await response.json()
+                        logger.info(f"Получен JSON ответ: {json.dumps(data, indent=2)}")
+
+                        # Извлекаем ID моделей из ответа
+                        models = [model.get("id", "") for model in data.get("data", [])]
+                        models = [model for model in models if model]  # Фильтруем пустые значения
+
+                        if models:
+                            logger.info(f"Доступные модели: {', '.join(models)}")
+
+                            # Проверяем, доступна ли модель по умолчанию
+                            # В LM Studio имя модели может отличаться от того, что указано в .env
+                            # Поэтому просто выводим список доступных моделей
+                            logger.info(f"Модель по умолчанию: '{DEFAULT_MODEL}'")
+                            logger.info(f"Убедитесь, что эта модель загружена в LM Studio")
+                        else:
+                            logger.warning("Не найдено доступных моделей. Убедитесь, что модель загружена в LM Studio")
+
+                        return True
+                    else:
+                        error_text = await response.text()
+                        logger.error(f"Ошибка API: {response.status}, {error_text}")
+                        return False
+            except aiohttp.ClientError as e:
+                logger.error(f"Ошибка соединения: {e}")
+                return False
+    except Exception as e:
+        logger.error(f"Неожиданная ошибка: {e}")
+        return False
+
 
 async def test_ollama_generation():
     """Тестирует генерацию текста с помощью Ollama."""
-    logger.info(f"Тестирование генерации текста с моделью '{DEFAULT_MODEL}'")
+    logger.info(f"Тестирование генерации текста с моделью '{DEFAULT_MODEL}' через Ollama")
 
     try:
         # Для Ollama 0.6.x используется endpoint /api/generate
@@ -154,30 +202,111 @@ async def test_ollama_generation():
         logger.error(f"Неожиданная ошибка: {e}")
         return False
 
+async def test_lmstudio_generation():
+    """Тестирует генерацию текста с помощью LM Studio."""
+    logger.info(f"Тестирование генерации текста с моделью '{DEFAULT_MODEL}' через LM Studio")
+
+    try:
+        # LM Studio использует OpenAI-совместимый API
+        generate_url = f"{LLM_API_URL}/chat/completions"
+        logger.info(f"URL для генерации: {generate_url}")
+
+        payload = {
+            "model": DEFAULT_MODEL,
+            "messages": [{"role": "user", "content": "Привет, как дела?"}],
+            "max_tokens": 100,
+            "temperature": 0.7,
+            "stream": False
+        }
+
+        logger.info(f"Отправка запроса с payload: {json.dumps(payload, ensure_ascii=False)}")
+
+        # Устанавливаем таймаут для запросов
+        timeout = aiohttp.ClientTimeout(total=15)  # 15 секунд
+
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            try:
+                async with session.post(generate_url, json=payload) as response:
+                    logger.info(f"Получен ответ со статусом: {response.status}")
+
+                    if response.status == 200:
+                        # Читаем ответ как JSON
+                        result = await response.json()
+                        logger.info(f"Получен JSON ответ: {json.dumps(result, ensure_ascii=False, indent=2)}")
+
+                        # Извлекаем текст ответа
+                        choices = result.get("choices", [])
+                        if choices and len(choices) > 0:
+                            response_text = choices[0].get("message", {}).get("content", "")
+                            logger.info(f"Получен ответ от модели: '{response_text[:100]}...'")
+                            return True
+                        else:
+                            logger.error("Получен пустой ответ от модели")
+                            return False
+                    else:
+                        error_text = await response.text()
+                        logger.error(f"Ошибка API: {response.status}, {error_text}")
+                        return False
+            except aiohttp.ClientError as e:
+                logger.error(f"Ошибка соединения: {e}")
+                return False
+            except asyncio.TimeoutError:
+                logger.error("Превышено время ожидания ответа от LM Studio API (15 секунд)")
+                return False
+    except Exception as e:
+        logger.error(f"Неожиданная ошибка: {e}")
+        return False
+
 
 async def main():
-    """Основная функция для проверки Ollama."""
-    logger.info("Начало проверки Ollama API")
+    """Основная функция для проверки LLM API."""
+    logger.info(f"Начало проверки {LLM_PROVIDER.upper()} API")
     
-    # Проверяем соединение с Ollama
-    connection_ok = await check_ollama_connection()
-    
-    if connection_ok:
-        logger.info("Соединение с Ollama API успешно установлено.")
+    # Проверяем соединение с выбранным провайдером
+    if LLM_PROVIDER == "ollama":
+        connection_ok = await check_ollama_connection()
         
-        # Тестируем генерацию текста
-        generation_ok = await test_ollama_generation()
-        
-        if generation_ok:
-            logger.info("Тест генерации текста успешно пройден.")
-            logger.info("Ollama API полностью работоспособен!")
+        if connection_ok:
+            logger.info("Соединение с Ollama API успешно установлено.")
+            
+            # Тестируем генерацию текста
+            generation_ok = await test_ollama_generation()
+            
+            if generation_ok:
+                logger.info("Тест генерации текста успешно пройден.")
+                logger.info("Ollama API полностью работоспособен!")
+            else:
+                logger.error("Тест генерации текста не пройден.")
+                logger.info("Проверьте, что модель корректно загружена и доступна.")
         else:
-            logger.error("Тест генерации текста не пройден.")
-            logger.info("Проверьте, что модель корректно загружена и доступна.")
+            logger.error("Не удалось установить соединение с Ollama API.")
+            logger.info("Проверьте, что Ollama запущен и доступен по указанному URL.")
+            logger.info(f"Текущий URL: {LLM_API_URL}")
+    
+    elif LLM_PROVIDER == "lmstudio":
+        connection_ok = await check_lmstudio_connection()
+        
+        if connection_ok:
+            logger.info("Соединение с LM Studio API успешно установлено.")
+            
+            # Тестируем генерацию текста
+            generation_ok = await test_lmstudio_generation()
+            
+            if generation_ok:
+                logger.info("Тест генерации текста успешно пройден.")
+                logger.info("LM Studio API полностью работоспособен!")
+            else:
+                logger.error("Тест генерации текста не пройден.")
+                logger.info("Проверьте, что модель корректно загружена и доступна в LM Studio.")
+        else:
+            logger.error("Не удалось установить соединение с LM Studio API.")
+            logger.info("Проверьте, что LM Studio запущен и доступен по указанному URL.")
+            logger.info(f"Текущий URL: {LLM_API_URL}")
+    
     else:
-        logger.error("Не удалось установить соединение с Ollama API.")
-        logger.info("Проверьте, что Ollama запущен и доступен по указанному URL.")
-        logger.info(f"Текущий URL: {LLM_API_URL}")
+        logger.error(f"Неизвестный провайдер LLM: {LLM_PROVIDER}")
+        logger.info("Поддерживаемые провайдеры: ollama, lmstudio")
+        logger.info("Укажите провайдер в переменной окружения LLM_PROVIDER или в файле .env")
 
 
 if __name__ == "__main__":

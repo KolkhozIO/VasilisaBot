@@ -16,6 +16,7 @@ VasilisaBot is an asynchronous Telegram bot that interacts with Ollama for answe
 - Temperature configuration for different types of requests
 - Automatic data saving
 - Simple and intuitive interface
+- Multilingual support (English and Russian)
 
 ## Requirements
 
@@ -41,6 +42,7 @@ pip install -r requirements.txt
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
 LLM_API_URL=http://localhost:11434/api
 LLM_MODEL=llama2
+BOT_LANGUAGE=EN  # EN for English, RU for Russian
 LOG_LEVEL=INFO  # Optional: DEBUG, INFO, WARNING, ERROR
 ```
 
@@ -226,12 +228,32 @@ The bot requires Ollama to function. You can:
 
 ## Project Structure
 
-- `bot.py` - Main bot file
-- `llm_client.py` - Client for interacting with Ollama
-- `requirements.txt` - Project dependencies
-- `.env` - Environment variables file
-- `.env.example` - Example environment variables file
-- `data/` - Directory for storing data (messages, settings, prompts)
+The project has been reorganized into a modular structure:
+
+```
+summarybot/
+├── bot.py                  # Main bot file
+├── config/                 # Configuration settings
+│   ├── __init__.py
+│   └── settings.py         # Global settings and constants
+├── handlers/               # Message and command handlers
+│   ├── __init__.py
+│   ├── command_handler.py  # Command handling logic
+│   └── message_handler.py  # Message handling logic
+├── models/                 # LLM client code
+│   ├── __init__.py
+│   ├── image_handler.py    # Image processing for LLM
+│   └── llm_client.py       # Core LLM client functionality
+├── utils/                  # Utility functions
+│   ├── __init__.py
+│   ├── file_utils.py       # File operations
+│   ├── image_utils.py      # Image processing utilities
+│   ├── language_utils.py   # Language and translation utilities
+│   └── logging_utils.py    # Logging setup
+├── data/                   # Data storage (created at runtime)
+│   └── parquet/            # Parquet data storage
+└── requirements.txt        # Project dependencies
+```
 
 ## Data Storage
 

@@ -1,263 +1,107 @@
-# VasilisaBot - Мудрый Telegram бот с Ollama
+# VasilisaBot - Wise Telegram Bot with Local LLMs
 
-VasilisaBot (ВасилисаБот) - это асинхронный Telegram бот, который взаимодействует с Ollama для ответов на вопросы и создания саммари текстов. Подобно Василисе Премудрой из русских сказок, бот анализирует сообщения, находит их суть и помогает пользователям. Бот поддерживает работу как в личных, так и в групповых чатах, сохраняет историю сообщений и корректно обрабатывает иерархию ответов.
+A Telegram bot that can answer questions and create summaries using local LLM models via Ollama or LM Studio.
 
-## Возможности
+**Language versions:**
+- [English](README.en.md)
+- [Russian](README.ru.md)
 
-- Асинхронная обработка сообщений
-- Ответы на вопросы с использованием Ollama
-- Создание саммари из истории сообщений
-- Выбор различных моделей Ollama (llama2, mistral, gemma, deepseek и др.)
-- Настройка пользовательских промптов для чатов
-- Работа как в личных, так и в групповых чатах
-- Сохранение и восстановление истории сообщений
-- Корректная обработка иерархии ответов
-- Поддержка редактирования сообщений
-- Настройка температуры генерации для разных типов запросов
-- Автоматическое сохранение данных
-- Простой и понятный интерфейс
+## Project Structure
 
-## Требования
+The project has been reorganized into a modular structure:
+
+```
+summarybot/
+├── bot.py                  # Main bot file
+├── config/                 # Configuration settings
+│   ├── __init__.py
+│   └── settings.py         # Global settings and constants
+├── handlers/               # Message and command handlers
+│   ├── __init__.py
+│   ├── command_handler.py  # Command handling logic
+│   └── message_handler.py  # Message handling logic
+├── models/                 # LLM client code
+│   ├── __init__.py
+│   ├── image_handler.py    # Image processing for LLM
+│   └── llm_client.py       # Core LLM client functionality
+├── utils/                  # Utility functions
+│   ├── __init__.py
+│   ├── file_utils.py       # File operations
+│   ├── image_utils.py      # Image processing utilities
+│   └── logging_utils.py    # Logging setup
+├── data/                   # Data storage (created at runtime)
+│   └── parquet/            # Parquet data storage
+└── requirements.txt        # Project dependencies
+```
+
+## Key Features
+
+1. **Modular Structure**: Code is organized into logical modules, making it easier to maintain and extend.
+
+2. **Multiple LLM Providers**: Support for both Ollama and LM Studio as LLM providers.
+
+3. **Platform Independence**: Works on Windows, macOS, and Linux without platform-specific code.
+
+4. **Image Handling**: Images are stored in a temporary directory and processed using base64 encoding, eliminating the need for local file paths.
+
+5. **Configuration**: Settings are centralized in the `config` module.
+
+6. **Utilities**: Common functionality is extracted into utility modules.
+
+7. **Multilingual Support**: Support for English and Russian languages, configurable via the `.env` file.
+
+## Setup and Installation
+
+1. Clone the repository:
+   ```
+   git clone https://github.com/yourusername/summarybot.git
+   cd summarybot
+   ```
+
+2. Create a virtual environment and install dependencies:
+   ```
+   python -m venv .venv
+   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+   pip install -r requirements.txt
+   ```
+
+3. Create a `.env` file with your configuration:
+   ```
+   TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+   
+   # Choose your LLM provider (ollama or lmstudio)
+   LLM_PROVIDER=ollama
+   
+   # For Ollama:
+   LLM_API_URL=http://localhost:11434/api
+   
+   # For LM Studio:
+   # LLM_API_URL=http://localhost:1234/v1
+   
+   LLM_MODEL=llama2
+   BOT_LANGUAGE=EN  # EN for English, RU for Russian
+   LOG_LEVEL=INFO
+   ```
+
+4. Check your LLM setup:
+   ```
+   python check_llm.py
+   ```
+
+5. Run the bot:
+   ```
+   python bot.py
+   ```
+
+## Dependencies
 
 - Python 3.8+
-- [Ollama](https://ollama.ai/) - локальный сервер для запуска LLM моделей
-- Telegram Bot Token (получается через [@BotFather](https://t.me/BotFather))
-
-## Установка
-
-1. Клонируйте репозиторий:
-```bash
-git clone https://github.com/yourusername/vasilisabot.git
-cd vasilisabot
-```
-
-2. Установите зависимости:
-```bash
-pip install -r requirements.txt
-```
-
-3. Создайте файл `.env` в корне проекта и добавьте следующие переменные:
-```
-TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
-LLM_API_URL=http://localhost:11434/api
-LLM_MODEL=llama2
-LOG_LEVEL=INFO  # Опционально: DEBUG, INFO, WARNING, ERROR
-```
-
-## Запуск
-
-1. Установите и запустите Ollama:
-   - Скачайте Ollama с [официального сайта](https://ollama.ai/)
-   - Запустите Ollama
-   - Загрузите нужные модели командой `ollama pull llama2` (или другие модели)
-
-2. Запустите бота:
-```bash
-python bot.py
-```
-
-## Автозапуск в WSL
-
-Для настройки автозапуска бота в WSL (Windows Subsystem for Linux) можно использовать следующие методы:
-
-> **Важно!** Убедитесь, что у вас запущен только один экземпляр бота. Если вы видите ошибку `Conflict: terminated by other getUpdates request`, это означает, что у вас запущено несколько экземпляров бота одновременно. Перед настройкой автозапуска проверьте и остановите все запущенные экземпляры:
-> ```bash
-> ps aux | grep python | grep bot.py
-> kill <PID>
-> ```
-
-### 1. Использование systemd (для WSL2 с поддержкой systemd)
-
-1. Создайте файл сервиса:
-
-```bash
-sudo nano /etc/systemd/system/summarybot.service
-```
-
-2. Добавьте следующее содержимое (замените пути на ваши):
-
-```
-[Unit]
-Description=Telegram Summary Bot
-After=network.target
-StartLimitIntervalSec=0
-
-[Service]
-Type=simple
-Restart=always
-RestartSec=1
-User=YOUR_USERNAME
-WorkingDirectory=/path/to/summarybot
-ExecStart=/usr/bin/python3 /path/to/summarybot/bot.py
-
-[Install]
-WantedBy=multi-user.target
-```
-
-3. Активируйте и запустите сервис:
-
-```bash
-sudo systemctl enable summarybot.service
-sudo systemctl start summarybot.service
-```
-
-4. Проверьте статус:
-
-```bash
-sudo systemctl status summarybot.service
-```
-
-### 2. Использование скрипта автозапуска WSL
-
-Если вы хотите запускать бота при старте Windows:
-
-1. Создайте файл `start_bot.sh` в директории проекта:
-
-```bash
-#!/bin/bash
-cd /path/to/summarybot
-python3 bot.py
-```
-
-2. Сделайте его исполняемым:
-
-```bash
-chmod +x start_bot.sh
-```
-
-3. Создайте батник Windows `start_bot.bat` в удобном месте на вашем компьютере:
-
-```batch
-@echo off
-wsl -d YOUR_DISTRO_NAME -u YOUR_USERNAME /path/to/summarybot/start_bot.sh
-```
-
-4. Добавьте этот батник в автозагрузку Windows:
-   - Нажмите Win+R, введите `shell:startup` и нажмите Enter
-   - Скопируйте или создайте ярлык на ваш батник в этой папке
-
-### 3. Использование cron (если systemd недоступен)
-
-1. Откройте crontab для редактирования:
-
-```bash
-crontab -e
-```
-
-2. Добавьте строку для запуска бота при перезагрузке:
-
-```
-@reboot cd /path/to/summarybot && python3 bot.py >> /path/to/summarybot/bot.log 2>&1
-```
-
-Примечание: Для работы cron в WSL может потребоваться запуск службы cron:
-
-```bash
-sudo service cron start
-sudo service cron enable
-```
-
-## Использование
-
-После запуска бота вы можете взаимодействовать с ним через Telegram:
-
-### Общие команды
-- `/start` - Начать взаимодействие с ботом
-- `/help` - Показать список доступных команд
-- `/summarize` - Создать саммари из последних сообщений
-- `/hidden_summary` - Создать саммари, видимое только вам
-- `/hidden_query` - Задать вопрос, видимый только вам
-- `/model` - Выбрать модель Ollama для использования
-- `/chatid` - Показать ID текущего чата
-- `/factual` - Включить/выключить режим фактических ответов (с пониженной температурой)
-- `/config` - Настроить параметры бота
-- `/reload` - Перезагрузить модули бота
-- Отправьте любое текстовое сообщение, чтобы получить ответ от выбранной модели
-
-### Команды для групповых чатов
-- `/prompt` - Настроить пользовательские промпты для текущего чата
-
-### Настройка промптов
-Вы можете настроить пользовательские промпты для:
-1. Ответов на вопросы - используйте `{question}` для вставки вопроса пользователя
-2. Создания саммари - используйте `{text}` для вставки текста для суммаризации
-
-Примеры промптов:
-```
-# Промпт для ответов
-Ты - дружелюбный помощник в чате. Вопрос: {question}
-
-Ответ:
-
-# Промпт для саммари
-Создай краткое и информативное саммари следующей беседы:
-
-{text}
-
-Саммари:
-```
-
-### Специальные промпты для отдельных групп
-Для групп, требующих особых промптов, которые не должны быть включены в репозиторий, вы можете создать файл `data/custom_prompts.json` со следующей структурой:
-
-```json
-{
-  "CHAT_ID": {
-    "answer": "Ваш промпт для ответов с {question}",
-    "summary": "Ваш промпт для саммари с {text}"
-  }
-}
-```
-
-Где `CHAT_ID` - это ID группового чата (отрицательное число). Этот файл добавлен в .gitignore и не будет включен в репозиторий при коммите.
-
-### Ответы на сообщения
-Бот корректно обрабатывает иерархию ответов. Если вы отвечаете на конкретное сообщение, бот учитывает этот контекст при формировании ответа.
-
-### Настройка конфигурации
-Используйте команду `/config` для настройки следующих параметров:
-- Температура генерации (для обычных ответов, фактических ответов и саммари)
-- Интервал автосохранения данных
-
-## Настройка Ollama
-
-Для работы бота требуется Ollama. Вы можете:
-
-1. Загрузить различные модели с помощью команды `ollama pull`:
-   ```bash
-   ollama pull llama2
-   ollama pull mistral
-   ollama pull gemma:2b
-   ollama pull deepseek-coder
-   ```
-
-2. Создать свои собственные модели с помощью Modelfile:
-   ```bash
-   ollama create mycustom -f ./Modelfile
-   ```
-
-3. Использовать модели с различными параметрами через API
-
-## Структура проекта
-
-- `bot.py` - Основной файл бота
-- `llm_client.py` - Клиент для взаимодействия с Ollama
-- `requirements.txt` - Зависимости проекта
-- `.env` - Файл с переменными окружения
-- `.env.example` - Пример файла с переменными окружения
-- `data/` - Директория для хранения данных (сообщения, настройки, промпты)
-
-## Хранение данных
-
-Бот автоматически сохраняет следующие данные:
-- История сообщений (в форматах JSON и Parquet)
-- Настройки пользовательских промптов
-- Выбранные модели для пользователей и чатов
-- Настройки температуры генерации
-- Общая конфигурация бота
-
-Все данные сохраняются в директории `data/`.
-
-## Лицензия
-
-MIT
+- python-telegram-bot
+- aiohttp
+- python-dotenv
+- Pillow (for image processing)
+- pandas and pyarrow (optional, for Parquet support)
+
+## License
+
+[MIT License](LICENSE)

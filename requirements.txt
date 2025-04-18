@@ -1,5 +1,7 @@
 python-telegram-bot==20.7
 aiohttp==3.9.1
 python-dotenv==1.0.0
-langchain==0.0.335
-langchain-community==0.0.13
+pillow==10.2.0
+# Optional dependencies for Parquet support
+pandas>=2.0.0
+pyarrow>=14.0.0
