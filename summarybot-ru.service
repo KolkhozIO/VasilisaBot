@@ -12,6 +12,8 @@ WorkingDirectory=/home/user/
 ExecStart=/usr/bin/python3 /home/user/bot.py
 Environment="TELEGRAM_BOT_TOKEN=YOUR_RU_BOT_TOKEN"
 Environment="BOT_LANGUAGE=RU"
+# Убедитесь, что переменные окружения доступны для процесса
+PassEnvironment=TELEGRAM_BOT_TOKEN BOT_LANGUAGE
 
 [Install]
 WantedBy=multi-user.target

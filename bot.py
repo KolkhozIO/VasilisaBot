@@ -182,9 +182,14 @@ def main():
         logger.error("Invalid Telegram bot token. Please set a valid token in config/settings.py")
         sys.exit(1)
     
-    # Log bot information
+    # Log bot information and environment variables
     bot_id = TELEGRAM_BOT_TOKEN[-8:] if TELEGRAM_BOT_TOKEN else "unknown"
     logger.info(f"Starting bot with ID: {bot_id}, Language: {BOT_LANGUAGE}, Data directory: {DATA_DIR}")
+    logger.info(f"Environment variables:")
+    logger.info(f"  TELEGRAM_BOT_TOKEN: {'*' * (len(TELEGRAM_BOT_TOKEN) - 8) + TELEGRAM_BOT_TOKEN[-8:] if TELEGRAM_BOT_TOKEN else 'Not set'}")
+    logger.info(f"  BOT_LANGUAGE: {BOT_LANGUAGE}")
+    logger.info(f"  LLM_PROVIDER: {LLM_PROVIDER}")
+    logger.info(f"  LLM_MODEL: {DEFAULT_MODEL}")
     
     # Create application
     application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()

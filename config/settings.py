@@ -6,8 +6,9 @@ import tempfile
 from pathlib import Path
 from dotenv import load_dotenv
 
-# Load environment variables
-load_dotenv(override=True)
+# Load environment variables from .env file only if they're not already set
+# This ensures that environment variables set by systemd have priority
+load_dotenv(override=False)
 
 # API settings
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "ollama").lower()  # Options: "ollama" or "lmstudio"
