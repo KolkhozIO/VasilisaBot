@@ -231,13 +231,27 @@ if __name__ == "__main__":
     # Handle Ctrl+C gracefully
     def signal_handler(sig, frame):
         logger.info("Received signal to terminate, saving data...")
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(save_data())
-        logger.info("Data saved, exiting...")
+        # Don't try to get a new event loop or run_until_complete here
+        # Just set a flag to indicate we want to exit
+        # The main loop will handle the cleanup
         sys.exit(0)
     
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
     
-    # Run the bot
-    asyncio.run(main())
+    # Create a new event loop and set it as the current event loop
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    
+    try:
+        # Run the main function
+        loop.run_until_complete(main())
+    except KeyboardInterrupt:
+        # Handle Ctrl+C
+        logger.info("Received KeyboardInterrupt, shutting down...")
+    finally:
+        # Save data before exiting
+        loop.run_until_complete(save_data())
+        # Close the event loop
+        loop.close()
+        logger.info("Bot shutdown complete.")
